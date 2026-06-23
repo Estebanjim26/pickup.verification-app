@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Service Pickup Verification</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1216; --panel:#171b21; --panel2:#1d222a; --border:#2a3038;
+    --text:#e8eaed; --muted:#9aa3ad; --accent:#5b8cff; --accent2:#7c5bff;
+    --good:#3ecf8e; --bad:#ff6b6b; --warn:#ffb454;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    padding:24px;
+  }
+  .wrap{max-width:980px;margin:0 auto;}
+  h1{font-size:22px;font-weight:700;margin:0 0 4px;letter-spacing:-0.02em;}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 24px;}
+  .card{
+    background:linear-gradient(180deg,var(--panel),var(--panel2));
+    border:1px solid var(--border); border-radius:14px;
+    padding:20px; margin-bottom:18px;
+  }
+  .step-head{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+  .step-num{
+    width:24px;height:24px;border-radius:50%;background:var(--accent);
+    color:white;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+  }
+  .step-title{font-size:15px;font-weight:600;}
+  .step-disabled{opacity:0.4; pointer-events:none;}
+  .dropzone{
+    border:2px dashed var(--border); border-radius:10px; padding:28px;
+    text-align:center; cursor:pointer; transition:all .15s; color:var(--muted);
+  }
+  .dropzone:hover, .dropzone.drag{border-color:var(--accent); background:rgba(91,140,255,0.06); color:var(--text);}
+  .dropzone svg{margin-bottom:8px;opacity:0.7;}
+  input[type=file]{display:none;}
+  .filename-pill{
+    display:inline-flex;align-items:center;gap:8px;background:rgba(91,140,255,0.12);
+    color:var(--accent);border:1px solid rgba(91,140,255,0.3);border-radius:20px;
+    padding:5px 12px;font-size:12.5px;margin-top:10px;
+  }
+  table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:12px;}
+  th,td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
+  th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.03em;}
+  .table-scroll{overflow-x:auto;border-radius:8px;border:1px solid var(--border);max-height:340px;overflow-y:auto;}
+  .err{color:var(--bad);font-size:13px;margin-top:10px;padding:10px 12px;background:rgba(255,107,107,0.1);border-radius:8px;border:1px solid rgba(255,107,107,0.25);}
+  .field{display:flex;flex-direction:column;gap:5px;}
+  .field label{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.03em;}
+  select{
+    background:var(--panel);border:1px solid var(--border);color:var(--text);
+    padding:9px 11px;border-radius:8px;font-size:13.5px;
+  }
+  button{
+    background:var(--accent);color:white;border:none;border-radius:9px;
+    padding:10px 18px;font-size:13.5px;font-weight:600;cursor:pointer;transition:all .12s;
+  }
+  button:hover{filter:brightness(1.1);}
+  button:active{transform:scale(0.98);}
+  button.secondary{background:var(--panel2);border:1px solid var(--border);color:var(--text);}
+  button:disabled{opacity:0.4;cursor:not-allowed;}
+  .row-flex{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+  .customer-info{
+    display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:4px;
+  }
+  .info-box{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;}
+  .info-box .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.03em;margin-bottom:5px;}
+  .info-box .val{font-size:15px;font-weight:600;word-break:break-word;}
+  .gap-rows{height:30px;}
+  .summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:18px;}
+  .stat{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center;}
+  .stat .num{font-size:22px;font-weight:700;}
+  .stat .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;margin-top:3px;letter-spacing:0.02em;}
+  .chart-wrap{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:480px;margin:0 auto 18px;}
+  .toast{
+    position:fixed;bottom:24px;right:24px;background:var(--panel2);border:1px solid var(--border);
+    border-radius:10px;padding:12px 18px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,0.4);
+    opacity:0;transform:translateY(10px);transition:all .2s;pointer-events:none;z-index:50;
+  }
+  .toast.show{opacity:1;transform:translateY(0);}
+  .status-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Service Pickup Verification</h1>
+  <p class="sub">Upload a route export to view customer pickup records and a full status breakdown report.</p>
+
+  <!-- STEP 1: Upload -->
+  <div class="card" id="step1">
+    <div class="step-head"><div class="step-num">1</div><div class="step-title">Upload file</div></div>
+    <div class="dropzone" id="dropzone">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3"/></svg>
+      <div>Drag & drop a .csv or .xlsx file, or click to browse</div>
+      <input type="file" id="fileInput" accept=".csv,.xlsx,.xls">
+    </div>
+    <div id="fileMeta"></div>
+    <div id="uploadError"></div>
+  </div>
+
+  <!-- STEP 2: Customer info + table -->
+  <div class="card step-disabled" id="step2">
+    <div class="step-head"><div class="step-num">2</div><div class="step-title">Customer</div></div>
+    <div id="customerSelectorWrap" style="display:none; margin-bottom:14px;">
+      <div class="field">
+        <label>Select customer (multiple found in file)</label>
+        <select id="customerSelect"></select>
+      </div>
+    </div>
+    <div class="customer-info">
+      <div class="info-box"><div class="lbl">Customer ID</div><div class="val" id="infoId">—</div></div>
+      <div class="info-box"><div class="lbl">Customer Name</div><div class="val" id="infoName">—</div></div>
+      <div class="info-box"><div class="lbl">Address</div><div class="val" id="infoAddress">—</div></div>
+    </div>
+
+    <div class="gap-rows"></div>
+
+    <div class="step-title" style="margin-bottom:10px;">Service Records</div>
+    <div class="table-scroll"><table id="recordsTable"></table></div>
+  </div>
+
+  <!-- STEP 3: Download -->
+  <div class="card step-disabled" id="step3">
+    <div class="step-head"><div class="step-num">3</div><div class="step-title">Download Service Report</div></div>
+    <div class="row-flex">
+      <select id="downloadFormat">
+        <option value="xlsx">.xlsx</option>
+        <option value="csv">.csv</option>
+      </select>
+      <button id="downloadBtn">Download File</button>
+    </div>
+  </div>
+
+  <!-- STEP 4: Report -->
+  <div class="card step-disabled" id="step4">
+    <div class="step-head"><div class="step-num">4</div><div class="step-title">Status Report</div></div>
+    <div id="reportEmpty" style="color:var(--muted);font-size:13px;">Upload a file to see the report.</div>
+    <div id="reportBody" style="display:none;">
+      <div class="summary-grid" id="summaryGrid"></div>
+      <div class="chart-wrap"><canvas id="reportChart" width="420" height="320"></canvas></div>
+      <div class="table-scroll" style="max-height:none;"><table id="statusTable"></table></div>
+      <div class="row-flex" style="margin-top:16px;">
+        <button class="secondary" id="downloadStatusReportBtn">Download Status Report (.xlsx)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const REQUIRED_COLS = ['Customer Id','Customer Name','Address','Service Time','Status','Weight (lbs)'];
+const COLUMN_ALIASES = {
+  'Customer Id': ['Customer Id'],
+  'Customer Name': ['Customer Name','Customer'],
+  'Address': ['Address'],
+  'Service Time': ['Service Time'],
+  'Status': ['Status'],
+  'Weight (lbs)': ['Weight (lbs)','Weight']
+};
+const TABLE_COLS = ['Service Time','Status','Weight (lbs)'];
+const COLORS = ['#5b8cff','#7c5bff','#33c9e8','#e85bb0','#9fd13c'];
+const STATUS_COLOR_OVERRIDES = {
+  'CONFIRMED': '#3ecf8e',
+  'NOT OUT': '#ffd43b',
+  'CANCELED': '#ff6b6b',
+  'CANCELLED': '#ff6b6b'
+};
+function getStatusColor(status, idx){
+  const upper = String(status).trim().toUpperCase();
+  if(STATUS_COLOR_OVERRIDES[upper]) return STATUS_COLOR_OVERRIDES[upper];
+  return COLORS[idx % COLORS.length];
+}
+
+let rawRows = [];
+let customers = {};
+let customerOrder = [];
+let selectedCustomerId = null;
+let chartInstance = null;
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2400);
+}
+
+function setEnabled(stepId, enabled){
+  document.getElementById(stepId).classList.toggle('step-disabled', !enabled);
+}
+
+function sanitizeFilename(name){
+  const cleaned = String(name || '').trim().replace(/[\\/:*?"<>|]+/g,'').replace(/\s+/g,' ');
+  return cleaned || 'Customer';
+}
+
+function triggerBlobDownload(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function toJSDate(val){
+  if(val === undefined || val === null || String(val).trim() === '') return null;
+  if(typeof val === 'number' && window.XLSX && XLSX.SSF){
+    const d = XLSX.SSF.parse_date_code(val);
+    if(d) return new Date(d.y, d.m - 1, d.d, d.H || 0, d.M || 0, Math.floor(d.S || 0));
+  }
+  const s = String(val).trim().replace(' ', 'T');
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// ---------- Upload ----------
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+
+dropzone.addEventListener('click', ()=>fileInput.click());
+['dragenter','dragover'].forEach(ev=>dropzone.addEventListener(ev, e=>{e.preventDefault();dropzone.classList.add('drag');}));
+['dragleave','drop'].forEach(ev=>dropzone.addEventListener(ev, e=>{e.preventDefault();dropzone.classList.remove('drag');}));
+dropzone.addEventListener('drop', e=>{
+  const f = e.dataTransfer.files[0];
+  if(f) handleFile(f);
+});
+fileInput.addEventListener('change', e=>{
+  const f = e.target.files[0];
+  if(f) handleFile(f);
+});
+
+function normalizeHeader(h){ return String(h).trim().toLowerCase(); }
+
+function findColumnMap(headers){
+  const map = {};
+  const normHeaders = headers.map(normalizeHeader);
+  for(const required of REQUIRED_COLS){
+    const aliases = COLUMN_ALIASES[required] || [required];
+    let foundIdx = -1;
+    for(const alias of aliases){
+      const idx = normHeaders.indexOf(normalizeHeader(alias));
+      if(idx !== -1){ foundIdx = idx; break; }
+    }
+    if(foundIdx === -1) return null;
+    map[required] = headers[foundIdx];
+  }
+  return map;
+}
+
+function handleFile(file){
+  const errEl = document.getElementById('uploadError');
+  errEl.innerHTML = '';
+  const name = file.name.toLowerCase();
+
+  const onParsed = (headers, dataRows) => {
+    const colMap = findColumnMap(headers);
+    if(!colMap){
+      errEl.innerHTML = `<div class="err">Missing required column(s). Found: ${headers.join(', ')}. Need: ${REQUIRED_COLS.join(', ')}.</div>`;
+      return;
+    }
+    rawRows = dataRows.map(r => ({
+      'Customer Id': r[colMap['Customer Id']] ?? '',
+      'Customer Name': r[colMap['Customer Name']] ?? '',
+      'Address': r[colMap['Address']] ?? '',
+      'Service Time': r[colMap['Service Time']] ?? '',
+      'Status': r[colMap['Status']] ?? '',
+      'Weight (lbs)': r[colMap['Weight (lbs)']] ?? ''
+    }));
+
+    if(!rawRows.length){
+      errEl.innerHTML = `<div class="err">The uploaded file has no data rows.</div>`;
+      setEnabled('step2', false); setEnabled('step3', false); setEnabled('step4', false);
+      return;
+    }
+
+    customers = {};
+    customerOrder = [];
+    rawRows.forEach(r=>{
+      const id = String(r['Customer Id']).trim();
+      if(id && !customers[id]){
+        customers[id] = { id, name: r['Customer Name'], address: r['Address'] };
+        customerOrder.push(id);
+      }
+    });
+
+    document.getElementById('fileMeta').innerHTML = `<div class="filename-pill">📄 ${file.name} — ${rawRows.length} rows, ${customerOrder.length} customer(s)</div>`;
+
+    const selectorWrap = document.getElementById('customerSelectorWrap');
+    const select = document.getElementById('customerSelect');
+    select.innerHTML = '';
+    if(customerOrder.length > 1){
+      selectorWrap.style.display = 'block';
+      customerOrder.forEach(id=>{
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = `${id} — ${customers[id].name || 'Unknown'}`;
+        select.appendChild(opt);
+      });
+      select.onchange = ()=>{ selectedCustomerId = select.value; renderCustomerView(); };
+    } else {
+      selectorWrap.style.display = 'none';
+    }
+
+    selectedCustomerId = customerOrder[0] || null;
+    setEnabled('step2', true);
+    setEnabled('step3', true);
+    setEnabled('step4', true);
+    renderCustomerView();
+    showToast('File loaded successfully');
+  };
+
+  if(name.endsWith('.csv')){
+    Papa.parse(file, {
+      header:true, dynamicTyping:false, skipEmptyLines:true,
+      complete: res => onParsed(res.meta.fields || [], res.data),
+      error: err => { errEl.innerHTML = `<div class="err">Failed to parse CSV: ${err.message}</div>`; }
+    });
+  } else if(name.endsWith('.xlsx') || name.endsWith('.xls')){
+    const reader = new FileReader();
+    reader.onload = e => {
+      try{
+        const wb = XLSX.read(e.target.result, {type:'array', cellDates:false});
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(sheet, {defval:''});
+        const headers = json.length ? Object.keys(json[0]) : [];
+        onParsed(headers, json);
+      }catch(err){
+        errEl.innerHTML = `<div class="err">Failed to parse Excel file: ${err.message}</div>`;
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    errEl.innerHTML = `<div class="err">Unsupported file type. Please upload a .csv or .xlsx file.</div>`;
+  }
+}
+
+// ---------- Customer view (info + table) ----------
+function getFilteredRows(){
+  if(!selectedCustomerId) return [];
+  return rawRows.filter(r => String(r['Customer Id']).trim() === selectedCustomerId);
+}
+
+function renderCustomerView(){
+  const c = customers[selectedCustomerId] || {id:'—', name:'—', address:'—'};
+  document.getElementById('infoId').textContent = c.id || '—';
+  document.getElementById('infoName').textContent = c.name || '—';
+  document.getElementById('infoAddress').textContent = c.address || '—';
+
+  const rows = getFilteredRows();
+  renderTable('recordsTable', rows, TABLE_COLS);
+  updateReport(rows);
+}
+
+function renderTable(tableId, rows, cols){
+  const table = document.getElementById(tableId);
+  if(!rows.length){ table.innerHTML = '<tr><td style="color:var(--muted);padding:14px;">No rows</td></tr>'; return; }
+  let html = '<tr>' + cols.map(c=>`<th>${c}</th>`).join('') + '</tr>';
+  for(const row of rows){
+    html += '<tr>' + cols.map(c=>`<td>${row[c]===undefined||row[c]===null?'':row[c]}</td>`).join('') + '</tr>';
+  }
+  table.innerHTML = html;
+}
+
+// ---------- Download Service Report ----------
+document.getElementById('downloadBtn').addEventListener('click', ()=>{
+  const rows = getFilteredRows();
+  if(!rows.length){ showToast('No data to download.'); return; }
+  const c = customers[selectedCustomerId] || {};
+  const format = document.getElementById('downloadFormat').value;
+  const safeName = sanitizeFilename(c.name);
+
+  const headerRowIndex = 4; // 0-based row index of TABLE_COLS header within the sheet
+  const aoa = [
+    ['Customer Id', c.id || ''],
+    ['Customer Name', c.name || ''],
+    ['Address', c.address || ''],
+    [],
+    TABLE_COLS,
+    ...rows.map(r => {
+      const dateVal = toJSDate(r['Service Time']);
+      return [dateVal || r['Service Time'], r['Status'], r['Weight (lbs)']];
+    })
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+  rows.forEach((r, i)=>{
+    const cellRef = XLSX.utils.encode_cell({ r: headerRowIndex + 1 + i, c: 0 });
+    if(ws[cellRef] && ws[cellRef].t === 'd'){
+      ws[cellRef].z = 'mm/dd/yyyy hh:mm:ss';
+    }
+  });
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Records');
+
+  if(format === 'xlsx'){
+    XLSX.writeFile(wb, `${safeName} Service Report.xlsx`);
+  } else {
+    const csv = XLSX.utils.sheet_to_csv(ws);
+    const blob = new Blob([csv], {type:'text/csv'});
+    triggerBlobDownload(blob, `${safeName} Service Report.csv`);
+  }
+  showToast('File downloaded');
+});
+
+// ---------- Report (all statuses found) ----------
+function updateReport(rows){
+  const emptyEl = document.getElementById('reportEmpty');
+  const bodyEl = document.getElementById('reportBody');
+
+  if(!rows.length){
+    emptyEl.style.display = 'block';
+    emptyEl.textContent = '0 records for this customer.';
+    bodyEl.style.display = 'none';
+    return;
+  }
+  emptyEl.style.display = 'none';
+  bodyEl.style.display = 'block';
+
+  const counts = {};
+  rows.forEach(r=>{
+    const status = String(r['Status']).trim() || '(blank)';
+    counts[status] = (counts[status] || 0) + 1;
+  });
+  const statuses = Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
+  const total = rows.length;
+
+  const grid = document.getElementById('summaryGrid');
+  grid.innerHTML = `<div class="stat"><div class="num">${total}</div><div class="lbl">Total Records</div></div>` +
+    statuses.map((s,i)=>`<div class="stat"><div class="num" style="color:${getStatusColor(s,i)}">${counts[s]}</div><div class="lbl">${s}</div></div>`).join('');
+
+  const ctx = document.getElementById('reportChart').getContext('2d');
+  if(chartInstance) chartInstance.destroy();
+  chartInstance = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: statuses,
+      datasets: [{
+        data: statuses.map(s=>counts[s]),
+        backgroundColor: statuses.map((s,i)=>getStatusColor(s,i)),
+        borderColor: '#171b21',
+        borderWidth: 2
+      }]
+    },
+    options: {
+      plugins: { legend: { position:'bottom', labels:{color:'#e8eaed', font:{size:12}} } },
+      cutout: '55%',
+      animation: { duration: 0 }
+    }
+  });
+
+  const table = document.getElementById('statusTable');
+  let html = '<tr><th>Status</th><th>Count</th><th>% of Total</th></tr>';
+  statuses.forEach((s,i)=>{
+    const pct = Math.round((counts[s]/total)*1000)/10;
+    html += `<tr><td><span class="status-dot" style="background:${getStatusColor(s,i)}"></span>${s}</td><td>${counts[s]}</td><td>${pct}%</td></tr>`;
+  });
+  table.innerHTML = html;
+
+  window._reportSnapshot = { total, statuses, counts };
+}
+
+// ---------- Download combined Status Report (table + chart image, one file) ----------
+document.getElementById('downloadStatusReportBtn').addEventListener('click', ()=>{
+  if(!window._reportSnapshot){ showToast('Upload a file first.'); return; }
+  const c = customers[selectedCustomerId] || {};
+  const s = window._reportSnapshot;
+  const safeName = sanitizeFilename(c.name);
+
+  const aoa = [
+    ['Customer Id', c.id || ''],
+    ['Customer Name', c.name || ''],
+    ['Address', c.address || ''],
+    [],
+    ['Status', 'Count', '% of Total'],
+    ...s.statuses.map(st => [st, s.counts[st], Math.round((s.counts[st]/s.total)*1000)/10 + '%']),
+    [],
+    ['Total Records', s.total]
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Status Report');
+  XLSX.writeFile(wb, `${safeName} Status Report.xlsx`);
+  showToast('Report downloaded');
+});
+</script>
+</body>
+</html>
