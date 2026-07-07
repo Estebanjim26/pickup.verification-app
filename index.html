@@ -126,7 +126,7 @@
           <canvas id="donutChart" width="340" height="280"></canvas>
         </div>
         <div class="chart-wrap">
-          <h3>Weekly Trend</h3>
+          <h3>Monthly Trend</h3>
           <canvas id="weeklyChart" width="440" height="280"></canvas>
         </div>
       </div>
@@ -193,16 +193,13 @@ function toJSDate(val){
   const s=String(val).trim().replace(' ','T');
   const d=new Date(s);return isNaN(d.getTime())?null:d;
 }
-function getWeekMonday(date){
-  const d=new Date(date);
-  const day=d.getDay();
-  const diff=d.getDate()-day+(day===0?-6:1);
-  d.setDate(diff);d.setHours(0,0,0,0);return d;
+function getMonthKey(date){
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
 }
-function fmtWeek(date){
-  const m=String(date.getMonth()+1).padStart(2,'0');
-  const d=String(date.getDate()).padStart(2,'0');
-  return `${m}/${d}`;
+function fmtMonth(key){
+  const [y,m]=key.split('-');
+  const names=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${names[parseInt(m,10)-1]} ${y}`;
 }
 function getStatusColor(status,idx){
   const u=String(status).trim().toUpperCase();
@@ -354,26 +351,25 @@ function updateReport(rows){
     });
   }
 
-  // Weekly trend data
-  const weekMap={};
+  // Monthly trend data
+  const monthMap={};
   rows.forEach(r=>{
     const d=toJSDate(r['Service Time']);if(!d)return;
-    const mon=getWeekMonday(d);const wk=mon.getTime();
-    if(!weekMap[wk])weekMap[wk]={date:mon,counts:{}};
+    const mk=getMonthKey(d);
+    if(!monthMap[mk])monthMap[mk]={counts:{}};
     const su=String(r['Status']).trim().toUpperCase();
     WEEKLY_TRACKED.forEach(t=>{if(su===t||(t==='CANCELED'&&su==='CANCELLED')||(t==='CANCELLED'&&su==='CANCELED'))
-      weekMap[wk].counts[t]=(weekMap[wk].counts[t]||0)+1;
+      monthMap[mk].counts[t]=(monthMap[mk].counts[t]||0)+1;
     });
   });
-  const weekKeys=Object.keys(weekMap).map(Number).sort((a,b)=>a-b);
-  const weekLabels=weekKeys.map(k=>fmtWeek(weekMap[k].date));
-  // Dedupe CANCELLED/CANCELED into one line
+  const monthKeys=Object.keys(monthMap).sort();
+  const weekLabels=monthKeys.map(k=>fmtMonth(k));
   const lineStatuses=['CONFIRMED','NOT OUT','CANCELED','NO PU STOP SERVICE'];
   const lineData=lineStatuses.map(ls=>({
     label:ls==='CANCELED'?'CANCELED/CANCELLED':ls,
     color:WEEKLY_COLORS[ls]||'#5b8cff',
-    values:weekKeys.map(k=>{
-      const c=weekMap[k].counts;
+    values:monthKeys.map(k=>{
+      const c=monthMap[k].counts;
       return ls==='CANCELED'?(c['CANCELED']||0)+(c['CANCELLED']||0):(c[ls]||0);
     })
   })).filter(ld=>ld.values.some(v=>v>0));
@@ -409,7 +405,7 @@ function updateReport(rows){
     options:{
       plugins:{legend:{position:'bottom',labels:{color:'#e8eaed',font:{size:11},boxWidth:12}}},
       scales:{
-        x:{ticks:{color:'#9aa3ad',font:{size:10}},grid:{color:'#2a3038'},title:{display:true,text:'Week of',color:'#9aa3ad',font:{size:11}}},
+        x:{ticks:{color:'#9aa3ad',font:{size:10}},grid:{color:'#2a3038'},title:{display:true,text:'Month',color:'#9aa3ad',font:{size:11}}},
         y:{ticks:{color:'#9aa3ad',font:{size:10}},grid:{color:'#2a3038'},beginAtZero:true,
           title:{display:true,text:'Count',color:'#9aa3ad',font:{size:11}}}
       },
